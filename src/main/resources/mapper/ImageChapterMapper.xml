@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="space.wenliang.ai.aigcplatformserver.mapper.ImageChapterMapper">
+  <resultMap id="BaseResultMap" type="space.wenliang.ai.aigcplatformserver.entity.ImageDramaEntity">
+    <!--@mbg.generated-->
+    <!--@Table image_drama-->
+    <id column="id" jdbcType="INTEGER" property="id" />
+    <result column="chapter_id" jdbcType="VARCHAR" property="chapterId" />
+    <result column="project_id" jdbcType="VARCHAR" property="projectId" />
+    <result column="chapter_name" jdbcType="VARCHAR" property="chapterName" />
+    <result column="content" jdbcType="LONGVARCHAR" property="content" />
+    <result column="sort_order" jdbcType="INTEGER" property="sortOrder" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    <!--@mbg.generated-->
+    id, chapter_id, project_id, chapter_name, content, sort_order
+  </sql>
+</mapper>

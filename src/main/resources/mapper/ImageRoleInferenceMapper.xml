@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="space.wenliang.ai.aigcplatformserver.mapper.ImageRoleInferenceMapper">
+  <resultMap id="BaseResultMap" type="space.wenliang.ai.aigcplatformserver.entity.ImageRoleInferenceEntity">
+    <!--@mbg.generated-->
+    <!--@Table image_role_inference-->
+    <id column="id" jdbcType="INTEGER" property="id" />
+    <result column="project_id" jdbcType="VARCHAR" property="projectId" />
+    <result column="chapter_id" jdbcType="VARCHAR" property="chapterId" />
+    <result column="role" jdbcType="VARCHAR" property="role" />
+    <result column="image_index" jdbcType="VARCHAR" property="imageIndex" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    <!--@mbg.generated-->
+    id, project_id, chapter_id, "role", image_index
+  </sql>
+</mapper>

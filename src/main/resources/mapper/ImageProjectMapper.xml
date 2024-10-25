@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="space.wenliang.ai.aigcplatformserver.mapper.ImageProjectMapper">
+  <resultMap id="BaseResultMap" type="space.wenliang.ai.aigcplatformserver.entity.ImageProjectEntity">
+    <!--@mbg.generated-->
+    <!--@Table image_project-->
+    <id column="id" jdbcType="INTEGER" property="id" />
+    <result column="project_id" jdbcType="VARCHAR" property="projectId" />
+    <result column="project_name" jdbcType="VARCHAR" property="projectName" />
+    <result column="project_type" jdbcType="VARCHAR" property="projectType" />
+    <result column="content" jdbcType="LONGVARCHAR" property="content" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    <!--@mbg.generated-->
+    id, project_id, project_name, project_type, content
+  </sql>
+</mapper>
