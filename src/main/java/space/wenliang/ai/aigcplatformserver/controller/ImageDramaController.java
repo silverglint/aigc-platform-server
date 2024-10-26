@@ -183,7 +183,7 @@ public class ImageDramaController {
     }
 
     @PostMapping("updateCommonRole")
-    public Result<Object> updateCommonRole(@RequestBody UpdateModelInfo updateModelInfo) {
+    public Result<Object> updateCommonRole(@RequestBody ImageCommonRoleEntity updateModelInfo) {
         bImageDramaService.updateCommonRole(updateModelInfo);
         return Result.success();
     }

@@ -450,20 +450,8 @@ public class BImageDramaService {
     }
 
 
-    public void updateCommonRole(UpdateModelInfo updateModelInfo) {
-
-        List<ImageCommonRoleEntity> updateList = updateModelInfo.getIds()
-                .stream()
-                .map(id -> {
-                    ImageCommonRoleEntity update = new ImageCommonRoleEntity();
-
-                    update.setId(id);
-                    update.setRole(updateModelInfo.getRole());
-
-                    return update;
-                }).toList();
-
-        imageCommonRoleService.updateBatchById(updateList);
+    public void updateCommonRole(ImageCommonRoleEntity updateModelInfo) {
+        imageCommonRoleService.updateById(updateModelInfo);
     }
 
 
