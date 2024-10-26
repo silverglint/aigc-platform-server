@@ -1,6 +1,7 @@
 package space.wenliang.ai.aigcplatformserver.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import space.wenliang.ai.aigcplatformserver.bean.DramaSummary;
 import space.wenliang.ai.aigcplatformserver.entity.DramaInfoEntity;
@@ -24,13 +25,7 @@ public interface DramaInfoMapper extends BaseMapper<DramaInfoEntity> {
             """)
     List<DramaSummary> dramaSummary4MySQL();
 
-    @Select("""
-            select chapter_id                                         as chapter_id,
-                   sum(length(text))                                  as word_count,
-                   count(*)                                           as text_count,
-                   max(audio_task_state)                              as max_task_state
-            from drama_info
-            group by chapter_id
-            """)
     List<DramaSummary> dramaSummary4SQLite();
+
+    List<DramaInfoEntity> getByChapterId(@Param("chapterId") String chapterId);
 }

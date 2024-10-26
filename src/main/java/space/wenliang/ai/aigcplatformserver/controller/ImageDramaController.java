@@ -1,25 +1,20 @@
 package space.wenliang.ai.aigcplatformserver.controller;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import space.wenliang.ai.aigcplatformserver.bean.AudioSegment;
-import space.wenliang.ai.aigcplatformserver.bean.ChapterBatchOperator;
 import space.wenliang.ai.aigcplatformserver.bean.ChapterExpose;
-import space.wenliang.ai.aigcplatformserver.bean.ChapterSummary;
 import space.wenliang.ai.aigcplatformserver.bean.ControlsUpdate;
 import space.wenliang.ai.aigcplatformserver.bean.DramaAdd;
-import space.wenliang.ai.aigcplatformserver.bean.PolyphonicParams;
+import space.wenliang.ai.aigcplatformserver.bean.DramaSummary;
 import space.wenliang.ai.aigcplatformserver.bean.ProjectQuery;
 import space.wenliang.ai.aigcplatformserver.bean.Subtitle;
 import space.wenliang.ai.aigcplatformserver.bean.TextRoleChange;
@@ -27,29 +22,23 @@ import space.wenliang.ai.aigcplatformserver.bean.UpdateModelInfo;
 import space.wenliang.ai.aigcplatformserver.common.Page;
 import space.wenliang.ai.aigcplatformserver.common.Result;
 import space.wenliang.ai.aigcplatformserver.config.EnvConfig;
-import space.wenliang.ai.aigcplatformserver.entity.ChapterInfoEntity;
+import space.wenliang.ai.aigcplatformserver.entity.DramaInfoEntity;
+import space.wenliang.ai.aigcplatformserver.entity.DramaInfoInferenceEntity;
+import space.wenliang.ai.aigcplatformserver.entity.ImageCommonRoleEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageDramaEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageProjectEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageRoleEntity;
-import space.wenliang.ai.aigcplatformserver.entity.TextCommonRoleEntity;
-import space.wenliang.ai.aigcplatformserver.service.ChapterInfoService;
+import space.wenliang.ai.aigcplatformserver.service.DramaInfoService;
 import space.wenliang.ai.aigcplatformserver.service.ImageDramaService;
 import space.wenliang.ai.aigcplatformserver.service.ImageProjectService;
-import space.wenliang.ai.aigcplatformserver.service.business.BChapterInfoService;
+import space.wenliang.ai.aigcplatformserver.service.business.BDramaInfoService;
 import space.wenliang.ai.aigcplatformserver.service.business.BImageDramaService;
 import space.wenliang.ai.aigcplatformserver.service.cache.GlobalSettingService;
 import space.wenliang.ai.aigcplatformserver.spring.annotation.SingleValueParam;
-import space.wenliang.ai.aigcplatformserver.util.AudioUtils;
 import space.wenliang.ai.aigcplatformserver.util.FileUtils;
 import space.wenliang.ai.aigcplatformserver.util.SubtitleUtils;
-import space.wenliang.ai.aigcplatformserver.util.srt.SRT;
-import space.wenliang.ai.aigcplatformserver.util.srt.SrtUtils;
 
-import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,7 +46,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
 
 @RestController
 @RequestMapping("imageDrama")
@@ -67,9 +55,9 @@ public class ImageDramaController {
     private final EnvConfig envConfig;
     private final ImageDramaService imageDramaService;
     private final ImageProjectService imageProjectService;
-    private final ChapterInfoService chapterInfoService;
+    private final DramaInfoService dramaInfoService;
     private final BImageDramaService bImageDramaService;
-    private final BChapterInfoService bChapterInfoService;
+    private final BDramaInfoService bDramaInfoService;
     private final GlobalSettingService globalSettingService;
 
     @PostMapping("pageChapters")
@@ -95,10 +83,10 @@ public class ImageDramaController {
                                      @SingleValueParam("chapterId") String chapterId) {
         ImageDramaEntity textChapter = imageDramaService.getImageDramaAndContent(projectId, chapterId);
         if (Objects.nonNull(textChapter)) {
-            Map<String, ChapterSummary> chapterSummaryMap = chapterInfoService.chapterSummaryMap();
-            ChapterSummary chapterSummary = chapterSummaryMap.get(chapterId);
+            Map<String, DramaSummary> chapterSummaryMap = dramaInfoService.chapterSummaryMap();
+            DramaSummary chapterSummary = chapterSummaryMap.get(chapterId);
             if (Objects.nonNull(chapterSummary)) {
-                textChapter.setAudioTaskState(chapterSummary.getMaxTaskState());
+                textChapter.setImageTaskState(chapterSummary.getMaxTaskState());
             }
         }
         return Result.success(textChapter);
@@ -115,9 +103,9 @@ public class ImageDramaController {
     @PostMapping("chapterAdd")
     public Result<Object> chapterAdd(@RequestPart("chapterAdd") DramaAdd chapterAdd,
                                      @RequestPart(value = "file") MultipartFile file) {
-        TreeMap<Integer, SRT> srt = SrtUtils.parseSrt(file.getInputStream());
-//        bImageDramaService.chapterAdd(chapterAdd, srt);
-        String read = IoUtil.read(file.getInputStream(), StandardCharsets.UTF_8);
+        String content = IoUtil.read(file.getInputStream(), StandardCharsets.UTF_8);
+        chapterAdd.getImageDrama().setContent(content);
+        bImageDramaService.chapterAdd(chapterAdd);
         return Result.success();
     }
 
@@ -133,13 +121,13 @@ public class ImageDramaController {
         if (StringUtils.isBlank(projectId) || StringUtils.isBlank(chapterId)) {
             return Result.success(new ArrayList<>());
         }
-        List<ChapterInfoEntity> list = bChapterInfoService.chapterInfos(projectId, chapterId);
+        List<DramaInfoEntity> list = bDramaInfoService.chapterInfos(projectId, chapterId);
         return Result.success(list);
     }
 
     @PostMapping("chapterInfoSort")
-    public Result<Object> chapterInfoSort(@RequestBody List<ChapterInfoEntity> chapterInfoEntities) {
-        bChapterInfoService.chapterInfoSort(chapterInfoEntities);
+    public Result<Object> chapterInfoSort(@RequestBody List<DramaInfoEntity> chapterInfoEntities) {
+        bDramaInfoService.chapterInfoSort(chapterInfoEntities);
         return Result.success();
     }
 
@@ -184,12 +172,12 @@ public class ImageDramaController {
 
     @PostMapping("commonRoles")
     public Result<Object> commonRoles(@SingleValueParam("projectId") String projectId) {
-        List<TextCommonRoleEntity> list = bImageDramaService.commonRoles(projectId);
+        List<ImageCommonRoleEntity> list = bImageDramaService.commonRoles(projectId);
         return Result.success(list);
     }
 
     @PostMapping("createCommonRole")
-    public Result<Object> createCommonRole(@RequestBody TextCommonRoleEntity textCommonRoleEntity) {
+    public Result<Object> createCommonRole(@RequestBody ImageCommonRoleEntity textCommonRoleEntity) {
         bImageDramaService.createCommonRole(textCommonRoleEntity);
         return Result.success();
     }
@@ -201,7 +189,7 @@ public class ImageDramaController {
     }
 
     @PostMapping("deleteCommonRole")
-    public Result<Object> deleteCommonRole(@RequestBody TextCommonRoleEntity textCommonRoleEntity) {
+    public Result<Object> deleteCommonRole(@RequestBody ImageCommonRoleEntity textCommonRoleEntity) {
         bImageDramaService.deleteCommonRole(textCommonRoleEntity);
         return Result.success();
     }
@@ -214,49 +202,43 @@ public class ImageDramaController {
 
     @PostMapping(value = "audioModelChange")
     public Result<Object> audioModelChange(@RequestBody UpdateModelInfo updateModelInfo) {
-        bChapterInfoService.audioModelChange(updateModelInfo);
-        return Result.success();
-    }
-
-    @PostMapping(value = "updateVolume")
-    public Result<Object> updateVolume(@RequestBody ChapterInfoEntity chapterInfoEntity) {
-        bChapterInfoService.updateVolume(chapterInfoEntity);
-        return Result.success();
-    }
-
-    @PostMapping(value = "updateSpeed")
-    public Result<Object> updateSpeed(@RequestBody ChapterInfoEntity chapterInfoEntity) {
-        bChapterInfoService.updateSpeed(chapterInfoEntity);
-        return Result.success();
-    }
-
-    @PostMapping(value = "updateInterval")
-    public Result<Object> updateInterval(@RequestBody ChapterInfoEntity chapterInfoEntity) {
-        bChapterInfoService.updateInterval(chapterInfoEntity);
+        bDramaInfoService.audioModelChange(updateModelInfo);
         return Result.success();
     }
 
     @PostMapping(value = "updateControls")
     public Result<Object> updateControls(@RequestBody ControlsUpdate controlsUpdate) {
-        bChapterInfoService.updateControls(controlsUpdate);
-        return Result.success();
-    }
-
-    @PostMapping(value = "updateChapterText")
-    public Result<Object> updateChapterText(@RequestBody ChapterInfoEntity chapterInfoEntity) {
-        bChapterInfoService.updateChapterText(chapterInfoEntity);
+        bDramaInfoService.updateControls(controlsUpdate);
         return Result.success();
     }
 
     @PostMapping(value = "deleteChapterInfo")
-    public Result<Object> deleteChapterInfo(@RequestBody ChapterInfoEntity chapterInfoEntity) {
-        bChapterInfoService.deleteChapterInfo(chapterInfoEntity);
+    public Result<Object> deleteChapterInfo(@RequestBody DramaInfoEntity chapterInfoEntity) {
+        bDramaInfoService.deleteChapterInfo(chapterInfoEntity);
+        return Result.success();
+    }
+
+    @PostMapping(value = "updateDramaInfo")
+    public Result<Object> updateDramaInfo(@RequestBody DramaInfoEntity chapterInfoEntity) {
+        bDramaInfoService.updateDramaInfo(chapterInfoEntity);
+        return Result.success();
+    }
+
+    @PostMapping(value = "saveDramaInfoInference")
+    public Result<Object> saveDramaInfoInference(@RequestBody DramaInfoInferenceEntity dramaInfoInference) {
+        bDramaInfoService.saveDramaInfoInference(dramaInfoInference);
+        return Result.success();
+    }
+
+    @PostMapping(value = "deleteDramaInfoInference")
+    public Result<Object> deleteDramaInfoInference(@RequestBody DramaInfoInferenceEntity dramaInfoInference) {
+        bDramaInfoService.deleteDramaInfoInference(dramaInfoInference);
         return Result.success();
     }
 
     @PostMapping(value = "createAudio")
-    public Result<Object> createAudio(@RequestBody ChapterInfoEntity chapterInfoEntity) {
-        bChapterInfoService.addAudioCreateTask(chapterInfoEntity);
+    public Result<Object> createAudio(@RequestBody DramaInfoEntity chapterInfoEntity) {
+        bDramaInfoService.addAudioCreateTask(chapterInfoEntity);
         return Result.success();
     }
 
@@ -265,13 +247,13 @@ public class ImageDramaController {
                                            @SingleValueParam("chapterId") String chapterId,
                                            @SingleValueParam("actionType") String actionType,
                                            @SingleValueParam("chapterInfoIds") List<Integer> chapterInfoIds) {
-        bChapterInfoService.startCreateAudio(projectId, chapterId, actionType, chapterInfoIds);
+        bDramaInfoService.startCreateAudio(projectId, chapterId, actionType, chapterInfoIds);
         return Result.success();
     }
 
     @PostMapping(value = "stopCreateAudio")
     public Result<Object> stopCreateAudio() {
-        bChapterInfoService.stopCreateAudio();
+        bDramaInfoService.stopCreateAudio();
         return Result.success();
     }
 
@@ -282,80 +264,16 @@ public class ImageDramaController {
     }
 
     @PostMapping(value = "addChapterInfo")
-    public Result<Object> addChapterInfo(@RequestBody ChapterInfoEntity chapterInfo) {
-        ChapterInfoEntity chapterInfoEntity = bChapterInfoService.addChapterInfo(chapterInfo);
+    public Result<Object> addChapterInfo(@RequestBody DramaInfoEntity chapterInfo) {
+        DramaInfoEntity chapterInfoEntity = bDramaInfoService.addChapterInfo(chapterInfo);
         return Result.success(chapterInfoEntity);
     }
 
-    @PostMapping("playAudio")
-    public ResponseEntity<byte[]> playAudio(@RequestBody ChapterInfoEntity chapterInfoEntity) throws Exception {
-
-        ChapterInfoEntity chapterInfo = chapterInfoService.getById(chapterInfoEntity.getId());
-
-        ImageProjectEntity textProject = imageProjectService.getByProjectId(chapterInfo.getProjectId());
-        ImageDramaEntity textChapter = imageDramaService.getByChapterId(chapterInfo.getChapterId());
-
-        Boolean subtitleOptimize = globalSettingService.getGlobalSetting().getSubtitleOptimize();
-
-        List<String> subtitles = SubtitleUtils.subtitleSplit(chapterInfo.getText(), subtitleOptimize);
-
-        String[] audioNames = chapterInfo.getAudioFiles().split(",");
-
-        if (CollectionUtils.isEmpty(subtitles) || subtitles.size() != audioNames.length) {
-            return null;
-        }
-
-        List<AudioSegment> audioSegments = new ArrayList<>();
-
-        for (int i = 0; i < audioNames.length; i++) {
-
-            AudioSegment subAudioSegment = new AudioSegment();
-            subAudioSegment.setId(chapterInfo.getId());
-            subAudioSegment.setPart(i);
-            subAudioSegment.setAudioName(audioNames[i]);
-            subAudioSegment.setText(subtitles.get(i));
-            subAudioSegment.setAudioVolume(chapterInfo.getAudioVolume());
-            subAudioSegment.setAudioSpeed(chapterInfo.getAudioSpeed());
-
-            if (i == audioNames.length - 1) {
-                subAudioSegment.setAudioInterval(chapterInfo.getAudioInterval());
-            } else {
-                subAudioSegment.setAudioInterval(globalSettingService.getGlobalSetting().getSubAudioInterval());
-            }
-
-            Path subPath = envConfig.buildProjectPath(
-                    "text",
-                    FileUtils.fileNameFormat(textProject.getProjectName()),
-                    FileUtils.fileNameFormat(textChapter.getChapterName()),
-                    "audio",
-                    audioNames[i]);
-
-            subAudioSegment.setAudioPath(subPath.toAbsolutePath().toString());
-
-            audioSegments.add(subAudioSegment);
-        }
-
-        if (!CollectionUtils.isEmpty(audioSegments)) {
-            Path path = envConfig.buildProjectPath(
-                    "text",
-                    FileUtils.fileNameFormat(textProject.getProjectName()),
-                    FileUtils.fileNameFormat(textChapter.getChapterName()),
-                    "tmp",
-                    chapterInfo.getIndex() + ".wav");
-
-            if (Files.notExists(path.getParent())) {
-                Files.createDirectories(path.getParent());
-            }
-            AudioUtils.mergeAudioFiles(audioSegments, path.toAbsolutePath().toString());
-            return ResponseEntity.ok().body(Files.readAllBytes(path));
-        }
-        return ResponseEntity.ok().body(null);
-    }
 
     @PostMapping(value = "chapterCondition")
     public Result<Object> chapterCondition(@SingleValueParam("projectId") String projectId,
                                            @SingleValueParam("chapterId") String chapterId) {
-        List<ChapterInfoEntity> chapterInfos = bChapterInfoService.chapterCondition(projectId, chapterId);
+        List<DramaInfoEntity> chapterInfos = bDramaInfoService.chapterCondition(projectId, chapterId);
         return Result.success(chapterInfos);
     }
 
@@ -398,23 +316,5 @@ public class ImageDramaController {
         }
 
         return Result.success(subtitles);
-    }
-
-    @PostMapping(value = "addPolyphonicInfo")
-    public Result<Object> addPolyphonicInfo(@RequestBody PolyphonicParams polyphonicParams) {
-        bChapterInfoService.addPolyphonicInfo(polyphonicParams);
-        return Result.success();
-    }
-
-    @PostMapping(value = "removePolyphonicInfo")
-    public Result<Object> removePolyphonicInfo(@RequestBody PolyphonicParams polyphonicParams) {
-        bChapterInfoService.removePolyphonicInfo(polyphonicParams);
-        return Result.success();
-    }
-
-    @PostMapping(value = "batchOperator")
-    public Result<Object> batchOperator(@RequestBody ChapterBatchOperator ChapterBatchOperator) {
-        bChapterInfoService.batchOperator(ChapterBatchOperator);
-        return Result.success();
     }
 }

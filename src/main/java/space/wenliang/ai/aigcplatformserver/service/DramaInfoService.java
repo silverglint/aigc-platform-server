@@ -3,22 +3,23 @@ package space.wenliang.ai.aigcplatformserver.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import io.vavr.Tuple2;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 import space.wenliang.ai.aigcplatformserver.bean.DramaSummary;
 import space.wenliang.ai.aigcplatformserver.entity.DramaInfoEntity;
-import space.wenliang.ai.aigcplatformserver.entity.TextChapterEntity;
+import space.wenliang.ai.aigcplatformserver.entity.DramaInfoInferenceEntity;
+import space.wenliang.ai.aigcplatformserver.entity.ImageDramaEntity;
 import space.wenliang.ai.aigcplatformserver.mapper.DramaInfoMapper;
-import space.wenliang.ai.aigcplatformserver.util.ChapterUtils;
+import space.wenliang.ai.aigcplatformserver.util.srt.SRT;
+import space.wenliang.ai.aigcplatformserver.util.srt.SrtUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -57,52 +58,39 @@ public class DramaInfoService extends ServiceImpl<DramaInfoMapper, DramaInfoEnti
 
 
     public List<DramaInfoEntity> getByChapterId(String chapterId) {
-        return this.list(new LambdaQueryWrapper<DramaInfoEntity>()
-                .eq(DramaInfoEntity::getChapterId, chapterId)
-                .orderByAsc(DramaInfoEntity::getTextSort)
-                .orderByAsc(DramaInfoEntity::getId));
+        return dramaInfoMapper.getByChapterId(chapterId);
     }
 
 
-    public List<DramaInfoEntity> buildChapterInfos(TextChapterEntity textChapterEntity) {
-        if (Objects.isNull(textChapterEntity) || StringUtils.isBlank(textChapterEntity.getContent())) {
+    public List<DramaInfoEntity> buildDramaInfos(ImageDramaEntity imageDramaEntity) {
+        if (Objects.isNull(imageDramaEntity) || StringUtils.isBlank(imageDramaEntity.getContent())) {
             return new ArrayList<>();
         }
 
-        List<String> dialoguePatterns = StringUtils.isBlank(textChapterEntity.getDialoguePattern())
-                ? List.of()
-                : List.of(textChapterEntity.getDialoguePattern());
-
         List<DramaInfoEntity> chapterInfoEntities = new ArrayList<>();
 
-        int paraIndex = 0;
+        TreeMap<Integer, SRT> srt = SrtUtils.parseSrt(imageDramaEntity.getContent());
 
-        for (String line : textChapterEntity.getContent().split("\n")) {
-            int sentIndex = 0;
+        srt.forEach((integer, srt1) -> {
+            DramaInfoEntity dramaInfoEntity = new DramaInfoEntity();
+            DramaInfoInferenceEntity inference = new DramaInfoInferenceEntity();
+            dramaInfoEntity.setProjectId(imageDramaEntity.getProjectId());
+            dramaInfoEntity.setChapterId(imageDramaEntity.getChapterId());
+            dramaInfoEntity.setTextSort(integer);
+            inference.setProjectId(imageDramaEntity.getProjectId());
+            inference.setChapterId(imageDramaEntity.getChapterId());
+            inference.setDramaInfoId(dramaInfoEntity.getId());
+            inference.setTextId(srt1.getId());
+            inference.setText(srt1.getSrtBody());
+            inference.setTimeStart(srt1.getBeginTime());
+            inference.setTimeEnd(srt1.getEndTime());
 
-            List<Tuple2<Boolean, String>> chapterInfoTuple2s = ChapterUtils.dialogueSplit(line, dialoguePatterns);
-            if (CollectionUtils.isEmpty(chapterInfoTuple2s)) {
-                continue;
-            }
+            dramaInfoEntity.setInferences(List.of(inference));
 
-            for (Tuple2<Boolean, String> chapterInfoTuple2 : chapterInfoTuple2s) {
+            dramaInfoEntity.setRole("未知");
 
-                DramaInfoEntity chapterInfoEntity = new DramaInfoEntity();
-                chapterInfoEntity.setProjectId(textChapterEntity.getProjectId());
-                chapterInfoEntity.setChapterId(textChapterEntity.getChapterId());
-                chapterInfoEntity.setParaIndex(paraIndex);
-                chapterInfoEntity.setSentIndex(sentIndex);
-                chapterInfoEntity.setText(chapterInfoTuple2._2);
-
-                chapterInfoEntity.setRole("旁白");
-
-                chapterInfoEntities.add(chapterInfoEntity);
-
-                sentIndex++;
-            }
-
-            paraIndex++;
-        }
+            chapterInfoEntities.add(dramaInfoEntity);
+        });
 
         return chapterInfoEntities;
     }

@@ -7,22 +7,46 @@
     <id column="id" jdbcType="INTEGER" property="id" />
     <result column="project_id" jdbcType="VARCHAR" property="projectId" />
     <result column="chapter_id" jdbcType="VARCHAR" property="chapterId" />
-    <result column="para_index" jdbcType="INTEGER" property="paraIndex" />
-    <result column="sent_index" jdbcType="INTEGER" property="sentIndex" />
-    <result column="text_id" jdbcType="VARCHAR" property="textId" />
-    <result column="text" jdbcType="LONGVARCHAR" property="text" />
-    <result column="text_lang" jdbcType="VARCHAR" property="textLang" />
     <result column="text_sort" jdbcType="INTEGER" property="textSort" />
     <result column="role" jdbcType="VARCHAR" property="role" />
     <result column="image_prompt" jdbcType="LONGVARCHAR" property="imagePrompt" />
     <result column="preview_image_files" jdbcType="VARCHAR" property="previewImageFiles" />
     <result column="final_image_files" jdbcType="VARCHAR" property="finalImageFiles" />
+
+    <collection property="inferences" ofType="space.wenliang.ai.aigcplatformserver.entity.DramaInfoInferenceEntity" resultMap="inferenceResultMap"/>
+  </resultMap>
+
+  <resultMap id="inferenceResultMap" type="space.wenliang.ai.aigcplatformserver.entity.DramaInfoInferenceEntity">
+    <id column="inference_id" jdbcType="INTEGER" property="id" />
+    <result column="project_id" jdbcType="VARCHAR" property="projectId" />
+    <result column="chapter_id" jdbcType="VARCHAR" property="chapterId" />
+    <result column="drama_info_id" jdbcType="INTEGER" property="dramaInfoId" />
+    <result column="text" jdbcType="LONGVARCHAR" property="text" />
+    <result column="text_id" jdbcType="INTEGER" property="textId" />
     <result column="time_start" jdbcType="VARCHAR" property="timeStart" />
     <result column="time_end" jdbcType="VARCHAR" property="timeEnd" />
   </resultMap>
+
   <sql id="Base_Column_List">
     <!--@mbg.generated-->
-    id, project_id, chapter_id, para_index, sent_index, text_id, "text", text_lang, text_sort,
-    "role", image_prompt, preview_image_files, final_image_files, time_start, time_end
+    id, project_id, chapter_id,  text_sort,
+    "role", image_prompt, preview_image_files, final_image_files,
   </sql>
+
+  <select id="getByChapterId" resultMap="BaseResultMap">
+    select d.*,d.id as drama_info_id,i.id as inference_id,i.text_id,i.text,i.time_start,i.time_end from drama_info d
+    left join drama_info_inference i on d.id = i.drama_info_id
+    where d.chapter_id = #{chapterId}
+    order by d.text_sort,d.id,i.text_id
+  </select>
+
+  <select id="dramaSummary4SQLite" resultType="space.wenliang.ai.aigcplatformserver.bean.DramaSummary">
+      select d.chapter_id          as chapter_id,
+             sum(length(text))     as word_count,
+             count(*)              as text_count,
+             max(image_task_state) as max_task_state
+      from drama_info d
+               left join drama_info_inference i on d.id = i.drama_info_id
+      group by d.chapter_id
+  </select>
 </mapper>

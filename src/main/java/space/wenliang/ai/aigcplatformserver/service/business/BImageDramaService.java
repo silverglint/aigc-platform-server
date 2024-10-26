@@ -2,7 +2,6 @@ package space.wenliang.ai.aigcplatformserver.service.business;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.vavr.Tuple2;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -27,27 +26,26 @@ import space.wenliang.ai.aigcplatformserver.entity.AmModelConfigEntity;
 import space.wenliang.ai.aigcplatformserver.entity.AmModelFileEntity;
 import space.wenliang.ai.aigcplatformserver.entity.AmPromptAudioEntity;
 import space.wenliang.ai.aigcplatformserver.entity.DramaInfoEntity;
+import space.wenliang.ai.aigcplatformserver.entity.ImageCommonRoleEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageDramaEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageProjectEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageRoleEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageRoleInferenceEntity;
-import space.wenliang.ai.aigcplatformserver.entity.TextCommonRoleEntity;
 import space.wenliang.ai.aigcplatformserver.exception.BizException;
 import space.wenliang.ai.aigcplatformserver.service.AmModelConfigService;
 import space.wenliang.ai.aigcplatformserver.service.AmModelFileService;
 import space.wenliang.ai.aigcplatformserver.service.AmPromptAudioService;
+import space.wenliang.ai.aigcplatformserver.service.DramaInfoInferenceService;
 import space.wenliang.ai.aigcplatformserver.service.DramaInfoService;
+import space.wenliang.ai.aigcplatformserver.service.ImageCommonRoleService;
 import space.wenliang.ai.aigcplatformserver.service.ImageDramaService;
 import space.wenliang.ai.aigcplatformserver.service.ImageProjectService;
 import space.wenliang.ai.aigcplatformserver.service.ImageRoleInferenceService;
 import space.wenliang.ai.aigcplatformserver.service.ImageRoleService;
-import space.wenliang.ai.aigcplatformserver.service.TextCommonRoleService;
 import space.wenliang.ai.aigcplatformserver.service.cache.GlobalSettingService;
 import space.wenliang.ai.aigcplatformserver.socket.GlobalWebSocketHandler;
-import space.wenliang.ai.aigcplatformserver.util.ChapterUtils;
 import space.wenliang.ai.aigcplatformserver.util.FileUtils;
 import space.wenliang.ai.aigcplatformserver.util.IdUtils;
-import space.wenliang.ai.aigcplatformserver.util.srt.SRT;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -133,8 +131,9 @@ public class BImageDramaService {
     private final ImageRoleService imageRoleService;
     private final ImageDramaService imageDramaService;
     private final DramaInfoService dramaInfoService;
+    private final DramaInfoInferenceService dramaInfoInferenceService;
     private final ImageProjectService imageProjectService;
-    private final TextCommonRoleService textCommonRoleService;
+    private final ImageCommonRoleService imageCommonRoleService;
     private final ImageRoleInferenceService imageRoleInferenceService;
     private final AmModelFileService amModelFileService;
     private final AmModelConfigService amModelConfigService;
@@ -209,7 +208,7 @@ public class BImageDramaService {
 
         if (Objects.nonNull(entity) && StringUtils.isNotBlank(textChapter.getContent())) {
 
-            saveChapterInfoEntities(textChapter);
+            saveDramaInfoEntities(textChapter);
 
             entity.setChapterName(textChapter.getChapterName());
             entity.setContent(textChapter.getContent());
@@ -218,7 +217,7 @@ public class BImageDramaService {
     }
 
 
-    public void chapterAdd(DramaAdd chapterAdd,TreeMap<Integer, SRT> srt) {
+    public void chapterAdd(DramaAdd chapterAdd) {
         ImageDramaEntity textChapter = chapterAdd.getImageDrama();
         List<ImageDramaEntity> sortChapters = chapterAdd.getSortDramas();
 
@@ -229,8 +228,7 @@ public class BImageDramaService {
 
         if (StringUtils.isNotBlank(textChapter.getContent())) {
 
-            saveChapterInfoEntities(textChapter);
-
+            saveDramaInfoEntities(textChapter);
 
             ImageDramaEntity save = new ImageDramaEntity();
             save.setProjectId(projectId);
@@ -387,10 +385,10 @@ public class BImageDramaService {
             }
 
             if (StringUtils.equals(textRoleChange.getFromRoleType(), "commonRole")) {
-                TextCommonRoleEntity textCommonRoleEntity = textCommonRoleService.getOne(
-                        new LambdaQueryWrapper<TextCommonRoleEntity>()
-                                .eq(TextCommonRoleEntity::getProjectId, textRoleChange.getProjectId())
-                                .eq(TextCommonRoleEntity::getRole, textRoleChange.getFormRoleName()));
+                ImageCommonRoleEntity textCommonRoleEntity = imageCommonRoleService.getOne(
+                        new LambdaQueryWrapper<ImageCommonRoleEntity>()
+                                .eq(ImageCommonRoleEntity::getProjectId, textRoleChange.getProjectId())
+                                .eq(ImageCommonRoleEntity::getRole, textRoleChange.getFormRoleName()));
 
                 if (Objects.nonNull(textCommonRoleEntity) && Objects.equals(textRoleChange.getChangeModel(), Boolean.TRUE)) {
                 }
@@ -410,9 +408,9 @@ public class BImageDramaService {
 
 
     public Boolean saveToCommonRole(ImageRoleEntity textRoleEntity) {
-//        List<TextCommonRoleEntity> commonRoleEntities = textCommonRoleService.list(
-//                new LambdaQueryWrapper<TextCommonRoleEntity>()
-//                        .eq(TextCommonRoleEntity::getRole, textRoleEntity.getRole()));
+//        List<ImageCommonRoleEntity> commonRoleEntities = textCommonRoleService.list(
+//                new LambdaQueryWrapper<ImageCommonRoleEntity>()
+//                        .eq(ImageCommonRoleEntity::getRole, textRoleEntity.getRole()));
 //
 //        if (!Objects.equals(textRoleEntity.getCoverCommonRole(), Boolean.TRUE)
 //                && !CollectionUtils.isEmpty(commonRoleEntities)) {
@@ -420,10 +418,10 @@ public class BImageDramaService {
 //        }
 //
 //        if (!CollectionUtils.isEmpty(commonRoleEntities)) {
-//            textCommonRoleService.removeByIds(commonRoleEntities.stream().map(TextCommonRoleEntity::getId).toList());
+//            textCommonRoleService.removeByIds(commonRoleEntities.stream().map(ImageCommonRoleEntity::getId).toList());
 //        }
 //
-//        TextCommonRoleEntity textCommonRoleEntity = new TextCommonRoleEntity();
+//        ImageCommonRoleEntity textCommonRoleEntity = new ImageCommonRoleEntity();
 //        textCommonRoleEntity.setProjectId(textRoleEntity.getProjectId());
 //        textCommonRoleEntity.setAudioRoleInfo(textRoleEntity);
 //        textCommonRoleEntity.setAudioModelInfo(textRoleEntity);
@@ -433,15 +431,14 @@ public class BImageDramaService {
     }
 
 
-    public List<TextCommonRoleEntity> commonRoles(String projectId) {
-        return textCommonRoleService.getByProjectId(projectId);
+    public List<ImageCommonRoleEntity> commonRoles(String projectId) {
+        return imageCommonRoleService.getByProjectId(projectId);
     }
 
 
-    public void createCommonRole(TextCommonRoleEntity textCommonRoleEntity) {
-        String amMcParamsJson = textCommonRoleEntity.getAmMcParamsJson();
+    public void createCommonRole(ImageCommonRoleEntity textCommonRoleEntity) {
 
-        textCommonRoleService.getByProjectId(textCommonRoleEntity.getProjectId())
+        imageCommonRoleService.getByProjectId(textCommonRoleEntity.getProjectId())
                 .stream()
                 .filter(r -> StringUtils.equals(r.getRole(), textCommonRoleEntity.getRole()))
                 .findAny()
@@ -449,47 +446,29 @@ public class BImageDramaService {
                     throw new BizException("预置角色名称[" + r.getRole() + "]已存在");
                 });
 
-        textCommonRoleEntity.setModelFile(amModelFileService.getByMfId(textCommonRoleEntity.getAmMfId()));
-        textCommonRoleEntity.setModelConfig(amModelConfigService.getByMcId(textCommonRoleEntity.getAmMcId()));
-        textCommonRoleEntity.setPromptAudio(amPromptAudioService.getByPaId(textCommonRoleEntity.getAmPaId()));
-
-        if (StringUtils.isNotBlank(amMcParamsJson)) {
-            textCommonRoleEntity.setAmMcParamsJson(amMcParamsJson);
-        }
-
-        textCommonRoleService.save(textCommonRoleEntity);
+        imageCommonRoleService.save(textCommonRoleEntity);
     }
 
 
     public void updateCommonRole(UpdateModelInfo updateModelInfo) {
 
-        List<TextCommonRoleEntity> updateList = updateModelInfo.getIds()
+        List<ImageCommonRoleEntity> updateList = updateModelInfo.getIds()
                 .stream()
                 .map(id -> {
-                    TextCommonRoleEntity update = new TextCommonRoleEntity();
+                    ImageCommonRoleEntity update = new ImageCommonRoleEntity();
 
                     update.setId(id);
                     update.setRole(updateModelInfo.getRole());
-                    update.setGender(updateModelInfo.getGender());
-                    update.setAge(updateModelInfo.getAge());
-                    update.setAmType(updateModelInfo.getAmType());
-                    update.setModelFile(amModelFileService.getByMfId(updateModelInfo.getAmMfId()));
-                    update.setModelConfig(amModelConfigService.getByMcId(updateModelInfo.getAmMcId()));
-                    update.setPromptAudio(amPromptAudioService.getByPaId(updateModelInfo.getAmPaId()));
-
-                    if (StringUtils.isNotBlank(updateModelInfo.getAmMcParamsJson())) {
-                        update.setAmMcParamsJson(updateModelInfo.getAmMcParamsJson());
-                    }
 
                     return update;
                 }).toList();
 
-        textCommonRoleService.updateBatchById(updateList);
+        imageCommonRoleService.updateBatchById(updateList);
     }
 
 
-    public void deleteCommonRole(TextCommonRoleEntity textCommonRoleEntity) {
-        textCommonRoleService.removeById(textCommonRoleEntity);
+    public void deleteCommonRole(ImageCommonRoleEntity textCommonRoleEntity) {
+        imageCommonRoleService.removeById(textCommonRoleEntity);
     }
 
 
@@ -532,27 +511,27 @@ public class BImageDramaService {
         List<ImageRoleInferenceEntity> roleInferenceEntities = imageRoleInferenceService.getByChapterId(chapterId);
 
         if (!CollectionUtils.isEmpty(roleInferenceEntities)) {
-            List<TextCommonRoleEntity> commonRoles = textCommonRoleService.list();
-            Map<String, TextCommonRoleEntity> commonRoleMap = commonRoles.
+            List<ImageCommonRoleEntity> commonRoles = imageCommonRoleService.list();
+            Map<String, ImageCommonRoleEntity> commonRoleMap = commonRoles.
                     stream()
-                    .collect(Collectors.toMap(TextCommonRoleEntity::getRole, Function.identity(), (a, _) -> a));
+                    .collect(Collectors.toMap(ImageCommonRoleEntity::getRole, Function.identity(), (a, b) -> a));
 
             List<ImageRoleEntity> textRoleEntities = roleInferenceEntities.stream()
-                    .collect(Collectors.toMap(ImageRoleInferenceEntity::getRole, Function.identity(), (v1, _) -> v1))
+                    .collect(Collectors.toMap(ImageRoleInferenceEntity::getRole, Function.identity(), (v1, b) -> v1))
                     .values()
                     .stream().map(roleInferenceEntity -> {
                         ImageRoleEntity textRoleEntity = new ImageRoleEntity();
                         textRoleEntity.setProjectId(projectId);
                         textRoleEntity.setChapterId(chapterId);
                         textRoleEntity.setRole(roleInferenceEntity.getRole());
-                        TextCommonRoleEntity commonRole = commonRoleMap.get(roleInferenceEntity.getRole());
+                        ImageCommonRoleEntity commonRole = commonRoleMap.get(roleInferenceEntity.getRole());
                         if (Objects.nonNull(commonRole)) {
                         }
                         return textRoleEntity;
                     }).toList();
 
             Map<String, ImageRoleInferenceEntity> roleInferenceEntityMap = roleInferenceEntities.stream()
-                    .collect(Collectors.toMap(ImageRoleInferenceEntity::getImageIndex, Function.identity(), (a, _) -> a));
+                    .collect(Collectors.toMap(ImageRoleInferenceEntity::getImageIndex, Function.identity(), (a, b) -> a));
 
             List<DramaInfoEntity> chapterInfoEntities = dramaInfoService.getByChapterId(chapterId);
 
@@ -577,7 +556,7 @@ public class BImageDramaService {
                         c.setRole(roleInferenceEntity.getRole());
 
                         if (commonRoleMap.containsKey(roleInferenceEntity.getRole())) {
-                            TextCommonRoleEntity commonRole = commonRoleMap.get(roleInferenceEntity.getRole());
+                            ImageCommonRoleEntity commonRole = commonRoleMap.get(roleInferenceEntity.getRole());
 
 
                             c.setRole(roleInferenceEntity.getRole());
@@ -597,7 +576,7 @@ public class BImageDramaService {
                 textRoleEntity.setProjectId(projectId);
                 textRoleEntity.setChapterId(chapterId);
                 textRoleEntity.setRole(asideRole);
-                TextCommonRoleEntity commonRole = commonRoleMap.get(asideRole);
+                ImageCommonRoleEntity commonRole = commonRoleMap.get(asideRole);
                 if (Objects.nonNull(commonRole)) {
                 }
                 saveTextRoles.add(textRoleEntity);
@@ -746,10 +725,10 @@ public class BImageDramaService {
             loadRoleInference(projectId, roleInferenceParam.getChapterId());
         }
         if (StringUtils.equals(roleInferenceParam.getInferenceType(), "input")) {
-            if (StringUtils.isNotBlank(roleInferenceParam.getInferenceResult())) {
-                List<DramaInfoEntity> chapterInfos = dramaInfoService.getByChapterId(chapterId);
-                mergeAiResultInfo(projectId, chapterId, roleInferenceParam.getInferenceResult(), chapterInfos);
-            }
+//            if (StringUtils.isNotBlank(roleInferenceParam.getInferenceResult())) {
+//                List<DramaInfoEntity> chapterInfos = dramaInfoService.getByChapterId(chapterId);
+//                mergeAiResultInfo(projectId, chapterId, roleInferenceParam.getInferenceResult(), chapterInfos);
+//            }
         }
         return Flux.empty();
     }
@@ -784,6 +763,7 @@ public class BImageDramaService {
                 });
 
         String systemMessage = roleInferenceParam.getSystemPrompt();
+        Integer tmServerId = roleInferenceParam.getTmServerId();
 
         String userMessage = roleInferenceParam.getUserPrompt()
                 .replace("@{小说内容}", content.toString())
@@ -796,7 +776,7 @@ public class BImageDramaService {
         AtomicBoolean isMapping = new AtomicBoolean(false);
         StringBuilder sbStr = new StringBuilder();
 
-        return aiService.stream(systemMessage, userMessage)
+        return aiService.stream(tmServerId, systemMessage, userMessage)
                 .publishOn(Schedulers.boundedElastic())
                 .doOnNext(v -> {
                     System.out.println(v);
@@ -853,65 +833,39 @@ public class BImageDramaService {
                 .doOnComplete(() -> mergeAiResultInfo(projectId, chapterId, aiResultStr.toString(), chapterInfos));
     }
 
-    public void saveChapterInfoEntities(ImageDramaEntity textChapter) {
+    public void saveDramaInfoEntities(ImageDramaEntity imageDrama) {
 
-        String projectId = textChapter.getProjectId();
-        String chapterId = textChapter.getChapterId();
-        String content = textChapter.getContent();
+        String projectId = imageDrama.getProjectId();
+        String chapterId = imageDrama.getChapterId();
 
-        List<DramaInfoEntity> chapterInfoEntities = new ArrayList<>();
-
-        int paraIndex = 0;
-
-        for (String line : content.split("\n")) {
-            int sentIndex = 0;
-
-            List<Tuple2<Boolean, String>> chapterInfoTuple2s = ChapterUtils.dialogueSplit(line, null);
-            if (CollectionUtils.isEmpty(chapterInfoTuple2s)) {
-                continue;
-            }
-
-            for (Tuple2<Boolean, String> chapterInfoTuple2 : chapterInfoTuple2s) {
-
-                DramaInfoEntity chapterInfoEntity = new DramaInfoEntity();
-                chapterInfoEntity.setProjectId(projectId);
-                chapterInfoEntity.setChapterId(chapterId);
-                chapterInfoEntity.setParaIndex(paraIndex);
-                chapterInfoEntity.setSentIndex(sentIndex);
-                chapterInfoEntity.setText(chapterInfoTuple2._2);
-
-                chapterInfoEntity.setRole("旁白");
-                chapterInfoEntity.setImageTaskState(AudioTaskStateConstants.init);
-
-                chapterInfoEntities.add(chapterInfoEntity);
-
-                sentIndex++;
-            }
-
-            paraIndex++;
-        }
+        List<DramaInfoEntity> dramaInfoEntities = dramaInfoService.buildDramaInfos(imageDrama);
 
         dramaInfoService.deleteByChapterId(chapterId);
+        dramaInfoInferenceService.deleteByChapterId(chapterId);
         imageRoleService.deleteByChapterId(chapterId);
 
-        if (!CollectionUtils.isEmpty(chapterInfoEntities)) {
+        if (!CollectionUtils.isEmpty(dramaInfoEntities)) {
 
-            List<TextCommonRoleEntity> commonRoleEntities = textCommonRoleService.getByProjectId(projectId);
-            Optional<TextCommonRoleEntity> asideRoleOptional = commonRoleEntities.stream()
-                    .filter(r -> StringUtils.equals(r.getRole(), "旁白"))
+            List<ImageCommonRoleEntity> commonRoleEntities = imageCommonRoleService.getByProjectId(projectId);
+            Optional<ImageCommonRoleEntity> asideRoleOptional = commonRoleEntities.stream()
+                    .filter(r -> StringUtils.equals(r.getRole(), "未知"))
                     .findAny();
 
             ImageRoleEntity textRoleEntity = new ImageRoleEntity();
             textRoleEntity.setProjectId(projectId);
             textRoleEntity.setChapterId(chapterId);
-            textRoleEntity.setRole("旁白");
+            textRoleEntity.setRole("未知");
 
             if (asideRoleOptional.isPresent()) {
-                TextCommonRoleEntity textCommonRoleEntity = asideRoleOptional.get();
+                ImageCommonRoleEntity textCommonRoleEntity = asideRoleOptional.get();
 
             }
 
-            dramaInfoService.saveBatch(chapterInfoEntities);
+            for (DramaInfoEntity dramaInfoEntity : dramaInfoEntities) {
+                dramaInfoService.save(dramaInfoEntity);
+                dramaInfoEntity.getInferences().forEach(o -> o.setDramaInfoId(dramaInfoEntity.getId()));
+                dramaInfoInferenceService.saveBatch(dramaInfoEntity.getInferences());
+            }
             imageRoleService.save(textRoleEntity);
 
         }
@@ -937,15 +891,15 @@ public class BImageDramaService {
 
             Map<String, AiResult.Role> aiResultRoleMap = aiResult.getRoles()
                     .stream()
-                    .collect(Collectors.toMap(AiResult.Role::getRole, Function.identity(), (a, _) -> a));
+                    .collect(Collectors.toMap(AiResult.Role::getRole, Function.identity(), (a, b) -> a));
             Map<String, AiResult.LinesMapping> linesMappingMap = aiResult.getLinesMappings()
                     .stream()
-                    .collect(Collectors.toMap(AiResult.LinesMapping::getLinesIndex, Function.identity(), (a, _) -> a));
+                    .collect(Collectors.toMap(AiResult.LinesMapping::getLinesIndex, Function.identity(), (a, b) -> a));
 
-            List<TextCommonRoleEntity> commonRoles = textCommonRoleService.list();
-            Map<String, TextCommonRoleEntity> commonRoleMap = commonRoles.
+            List<ImageCommonRoleEntity> commonRoles = imageCommonRoleService.list();
+            Map<String, ImageCommonRoleEntity> commonRoleMap = commonRoles.
                     stream()
-                    .collect(Collectors.toMap(TextCommonRoleEntity::getRole, Function.identity(), (a, _) -> a));
+                    .collect(Collectors.toMap(ImageCommonRoleEntity::getRole, Function.identity(), (a, b) -> a));
 
             List<Integer> audioModelResetIds = new ArrayList<>();
             boolean hasAside = false;
@@ -964,7 +918,7 @@ public class BImageDramaService {
                 }
 
                 if (commonRoleMap.containsKey(role)) {
-                    TextCommonRoleEntity commonRole = commonRoleMap.get(role);
+                    ImageCommonRoleEntity commonRole = commonRoleMap.get(role);
 
 
                 } else {
@@ -984,7 +938,7 @@ public class BImageDramaService {
                         textRoleEntity.setChapterId(chapterId);
                         textRoleEntity.setRole(role.getRole());
 
-                        TextCommonRoleEntity commonRole = commonRoleMap.get(role.getRole());
+                        ImageCommonRoleEntity commonRole = commonRoleMap.get(role.getRole());
                         if (Objects.nonNull(commonRole)) {
                         }
 
@@ -1081,7 +1035,7 @@ public class BImageDramaService {
                     role.setRole(m.getRole());
                     return role;
                 })
-                .collect(Collectors.toMap(AiResult.Role::getRole, Function.identity(), (v1, _) -> v1))
+                .collect(Collectors.toMap(AiResult.Role::getRole, Function.identity(), (v1, b) -> v1))
                 .values().stream().toList();
 
         List<AiResult.Role> newRoles = new ArrayList<>();

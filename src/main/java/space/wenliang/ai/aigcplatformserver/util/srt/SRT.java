@@ -2,8 +2,8 @@ package space.wenliang.ai.aigcplatformserver.util.srt;
 
 public class SRT {
     private Integer id;
-    private Integer beginTime;
-    private Integer endTime;
+    private String beginTime;
+    private String endTime;
     private String srtBody;
 
     public Integer getId() {
@@ -14,19 +14,19 @@ public class SRT {
         this.id = id;
     }
 
-    public Integer getBeginTime() {
+    public String getBeginTime() {
         return beginTime;
     }
 
-    public void setBeginTime(Integer beginTime) {
+    public void setBeginTime(String beginTime) {
         this.beginTime = beginTime;
     }
 
-    public Integer getEndTime() {
+    public String getEndTime() {
         return endTime;
     }
 
-    public void setEndTime(Integer endTime) {
+    public void setEndTime(String endTime) {
         this.endTime = endTime;
     }
 

@@ -67,7 +67,7 @@ public class TimeToken {
         int beginMilli = Integer.parseInt(startTime.substring(lastIndexOfStartTime + 1, startTime.length()));
         int beginTime = (beginHour * 3600 + beginMintue * 60 + beginSecond)
                 * 1000 + beginMilli;
-        srt.setBeginTime(beginTime);
+        srt.setBeginTime(String.valueOf(beginTime));
 
         int endHour = Integer.parseInt(endArray[0]);
         int endMintue = Integer.parseInt(endArray[1]);
@@ -78,7 +78,7 @@ public class TimeToken {
         }
         int endMilli = Integer.parseInt(endTime.substring(lastIndexOfStartTime + 1, endTime.length()));
         int endTimeInt = (endHour * 3600 + endMintue * 60 + endSecond) * 1000 + endMilli;
-        srt.setEndTime(endTimeInt);
+        srt.setEndTime(String.valueOf(endTimeInt));
     }
 
     /**

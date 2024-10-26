@@ -44,5 +44,5 @@ public class ImageDramaEntity {
     private Integer roleNum;
 
     @TableField(exist = false)
-    private Integer audioTaskState;
+    private Integer imageTaskState;
 }

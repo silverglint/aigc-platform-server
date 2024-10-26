@@ -3,6 +3,7 @@ package space.wenliang.ai.aigcplatformserver.util.srt;
 import lombok.SneakyThrows;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +14,11 @@ import java.util.TreeMap;
  * 2022/12/23 10:46
  */
 public class SrtUtils {
+
+    @SneakyThrows
+    public static TreeMap<Integer, SRT> parseSrt(String content) {
+        return parseSrt(new ByteArrayInputStream(content.getBytes()));
+    }
 
     /**
      * 解析SRT字幕文件
@@ -27,6 +33,7 @@ public class SrtUtils {
         TreeMap<Integer, SRT> srtMap = new TreeMap<>();
         StringBuilder sb = new StringBuilder();
         int key = 0;
+        String s = "";
         while ((line = br.readLine()) != null || sb.length() > 0) {
             if (!"".equals(line) && line != null) {
                 sb.append(line).append("@");
