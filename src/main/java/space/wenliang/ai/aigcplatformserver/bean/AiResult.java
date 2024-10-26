@@ -16,6 +16,10 @@ public class AiResult {
 
     private List<LinesMapping> linesMappings = new ArrayList<>();
 
+    private List<DramaRole> dramaRoles = new ArrayList<>();
+
+    private List<DramaLinesRole> dramaLinesRoles = new ArrayList<>();
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -38,5 +42,26 @@ public class AiResult {
         private String linesIndex;
         private String role;
         private String mood;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DramaRole {
+        private String role;
+        private String imagePrompt;
+
+        public DramaRole(String role) {
+            this.role = role;
+            this.imagePrompt = "";
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DramaLinesRole {
+        private String linesIndex;
+        private String role;
     }
 }

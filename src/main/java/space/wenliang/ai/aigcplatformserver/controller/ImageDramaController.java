@@ -194,6 +194,12 @@ public class ImageDramaController {
         return Result.success();
     }
 
+    @PostMapping("deleteRole")
+    public Result<Object> deleteRole(@RequestBody ImageRoleEntity role) {
+        bImageDramaService.deleteRole(role);
+        return Result.success();
+    }
+
     @PostMapping("queryRoleInferenceCache")
     public Result<Object> queryRoleInferenceCache(@SingleValueParam("projectId") String projectId,
                                                   @SingleValueParam("chapterId") String chapterId) {

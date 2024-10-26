@@ -1163,7 +1163,10 @@ public class BTextChapterServiceImpl implements BTextChapterService {
             }
         }
 
-        return new AiResult(roles, linesMappings);
+        AiResult aiResult = new AiResult();
+        aiResult.setRoles(roles);
+        aiResult.setLinesMappings(linesMappings);
+        return aiResult;
     }
 
     public AiResult reCombineAiResult(AiResult aiResult, List<ChapterInfoEntity> chapterInfos) throws IOException {

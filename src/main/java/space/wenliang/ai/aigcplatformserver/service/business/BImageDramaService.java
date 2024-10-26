@@ -14,9 +14,10 @@ import space.wenliang.ai.aigcplatformserver.ai.chat.AiService;
 import space.wenliang.ai.aigcplatformserver.bean.AiResult;
 import space.wenliang.ai.aigcplatformserver.bean.DramaAdd;
 import space.wenliang.ai.aigcplatformserver.bean.DramaSummary;
+import space.wenliang.ai.aigcplatformserver.bean.ImagePromptInferenceParam;
 import space.wenliang.ai.aigcplatformserver.bean.ImageRoleInferenceData;
+import space.wenliang.ai.aigcplatformserver.bean.ImageRoleInferenceParam;
 import space.wenliang.ai.aigcplatformserver.bean.ProjectQuery;
-import space.wenliang.ai.aigcplatformserver.bean.RoleInferenceParam;
 import space.wenliang.ai.aigcplatformserver.bean.TextRoleChange;
 import space.wenliang.ai.aigcplatformserver.bean.UpdateModelInfo;
 import space.wenliang.ai.aigcplatformserver.common.AudioTaskStateConstants;
@@ -51,11 +52,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -459,6 +460,10 @@ public class BImageDramaService {
         imageCommonRoleService.removeById(textCommonRoleEntity);
     }
 
+    public void deleteRole(ImageRoleEntity imageRole) {
+        imageRoleService.removeById(imageRole.getId());
+    }
+
 
     public ImageRoleInferenceData queryRoleInferenceCache(String projectId, String chapterId) {
         List<DramaInfoEntity> chapterInfos = dramaInfoService.getByChapterId(chapterId);
@@ -703,7 +708,7 @@ public class BImageDramaService {
 //    }
 
 
-    public Flux<String> roleInference(RoleInferenceParam roleInferenceParam) {
+    public Flux<String> roleInference(ImageRoleInferenceParam roleInferenceParam) {
         String projectId = roleInferenceParam.getProjectId();
         String chapterId = roleInferenceParam.getChapterId();
         if (StringUtils.equals(roleInferenceParam.getInferenceType(), "online")) {
@@ -721,41 +726,43 @@ public class BImageDramaService {
         return Flux.empty();
     }
 
-    public Flux<String> onlineRoleInference(RoleInferenceParam roleInferenceParam) {
+    public Flux<String> imagePromptInference(ImagePromptInferenceParam param) {
+        String projectId = param.getProjectId();
+        String chapterId = param.getChapterId();
+        if (StringUtils.equals(param.getInferenceType(), "online")) {
+            return onlinePromptInference(param);
+        }
+        if (StringUtils.equals(param.getInferenceType(), "last")) {
+            loadRoleInference(projectId, param.getChapterId());
+        }
+        if (StringUtils.equals(param.getInferenceType(), "input")) {
+//            if (StringUtils.isNotBlank(param.getInferenceResult())) {
+//                List<DramaInfoEntity> chapterInfos = dramaInfoService.getByChapterId(chapterId);
+//                mergeAiResultInfo(projectId, chapterId, param.getInferenceResult(), chapterInfos);
+//            }
+        }
+        return Flux.empty();
+    }
+
+    public Flux<String> onlineRoleInference(ImageRoleInferenceParam roleInferenceParam) {
         String projectId = roleInferenceParam.getProjectId();
         String chapterId = roleInferenceParam.getChapterId();
 
-        List<DramaInfoEntity> chapterInfos = dramaInfoService.getByChapterId(chapterId);
+        List<DramaInfoEntity> dramaInfos = dramaInfoService.getByChapterId(chapterId);
 
-        List<String> linesList = new ArrayList<>();
-        chapterInfos.forEach(lineInfo -> {
-            linesList.add(lineInfo.getIndex() + ": " + lineInfo.getText());
-        });
-
-        if (CollectionUtils.isEmpty(linesList)) {
-            globalWebSocketHandler.sendErrorMessage("文本大模型请求异常", "没有查询到对话，请检查是否有标记对话");
-            return Flux.empty();
-        }
-
-        String lines = String.join("\n", linesList);
         StringBuilder content = new StringBuilder();
 
-        chapterInfos.stream()
-                .collect(Collectors.groupingBy(DramaInfoEntity::getParaIndex, TreeMap::new, Collectors.toList()))
-                .values()
-                .forEach(val -> {
-                    val.stream().sorted(Comparator.comparingInt(DramaInfoEntity::getSentIndex))
-                            .map(DramaInfoEntity::getText)
-                            .forEach(content::append);
-                    content.append("\n");
-                });
+        dramaInfos.forEach(val -> {
+            content.append(val.getIndex()).append("：");
+            val.getText().forEach(content::append);
+            content.append("\n");
+        });
 
         String systemMessage = roleInferenceParam.getSystemPrompt();
         Integer tmServerId = roleInferenceParam.getTmServerId();
 
         String userMessage = roleInferenceParam.getUserPrompt()
-                .replace("@{小说内容}", content.toString())
-                .replace("@{对话列表}", lines);
+                .replace("@{小说内容}", content.toString());
 
         log.info("\n提示词, systemMessage: {}", systemMessage);
         log.info("\n提示词, userMessage: {}", userMessage);
@@ -785,21 +792,15 @@ public class BImageDramaService {
                                     isMapping.set(false);
                                     continue;
                                 }
-                                if (StringUtils.equals("台词分析:", line)) {
+                                if (StringUtils.equals("出场分析:", line)) {
                                     isMapping.set(true);
                                     continue;
                                 }
                                 if (!isMapping.get()) {
-                                    String[] split = line.split(",");
-                                    if (split.length == 3) {
-                                        globalWebSocketHandler.sendSuccessMessage("角色推理", line);
-                                    }
+                                    globalWebSocketHandler.sendSuccessMessage("角色分析", line);
                                 }
                                 if (isMapping.get()) {
-                                    String[] split = line.split(",");
-                                    if (split.length == 3) {
-                                        globalWebSocketHandler.sendSuccessMessage("情感推理", line);
-                                    }
+                                    globalWebSocketHandler.sendSuccessMessage("出场分析", line);
                                 }
                             }
 
@@ -818,7 +819,78 @@ public class BImageDramaService {
                     globalWebSocketHandler.sendErrorMessage("文本大模型请求异常", errorMessage);
                     return Flux.error(e);
                 })
-                .doOnComplete(() -> mergeAiResultInfo(projectId, chapterId, aiResultStr.toString(), chapterInfos));
+                .doOnComplete(() -> mergeAiResultInfo(projectId, chapterId, aiResultStr.toString(), dramaInfos));
+    }
+
+    public Flux<String> onlinePromptInference(ImagePromptInferenceParam param) {
+        String projectId = param.getProjectId();
+        String chapterId = param.getChapterId();
+
+        List<DramaInfoEntity> dramaInfos = dramaInfoService.getByChapterId(chapterId);
+
+        StringBuilder content = new StringBuilder();
+
+        dramaInfos.forEach(val -> {
+            content.append(val.getIndex()).append("：");
+            val.getText().forEach(content::append);
+            content.append("\n");
+        });
+
+        String systemMessage = param.getSystemPrompt();
+        Integer tmServerId = param.getTmServerId();
+
+        String userMessage = param.getUserPrompt()
+                .replace("@{小说内容}", content.toString());
+
+        log.info("\n提示词, systemMessage: {}", systemMessage);
+        log.info("\n提示词, userMessage: {}", userMessage);
+
+        StringBuilder aiResultStr = new StringBuilder();
+        AtomicBoolean isMapping = new AtomicBoolean(false);
+        StringBuilder sbStr = new StringBuilder();
+
+        return aiService.stream(tmServerId, systemMessage, userMessage)
+                .publishOn(Schedulers.boundedElastic())
+                .doOnNext(v -> {
+                    System.out.println(v);
+                    aiResultStr.append(v);
+
+                    try {
+                        sbStr.append(v);
+                        while (true) {
+                            int newlineIndex = sbStr.indexOf("\n");
+                            if (newlineIndex == -1) {
+                                break;
+                            }
+                            String line = sbStr.substring(0, newlineIndex + 1).trim();
+                            sbStr.delete(0, newlineIndex + 1);
+
+                            if (StringUtils.isNotBlank(line)) {
+                                if (StringUtils.equals("画面分析:", line)) {
+                                    isMapping.set(true);
+                                    continue;
+                                }
+                                if (isMapping.get()) {
+                                    globalWebSocketHandler.sendSuccessMessage("画面分析", line);
+                                }
+                            }
+
+                        }
+                    } catch (Exception e) {
+                        log.error(e.getMessage(), e);
+                    }
+                })
+                .onErrorResume(e -> {
+                    String errorMessage;
+                    if (e instanceof WebClientResponseException.Unauthorized) {
+                        errorMessage = "未经授权的访问，请检查 apiKey 等相关配置";
+                    } else {
+                        errorMessage = "错误请求：" + e.getMessage();
+                    }
+                    globalWebSocketHandler.sendErrorMessage("文本大模型请求异常", errorMessage);
+                    return Flux.error(e);
+                })
+                .doOnComplete(() -> mergePromptResultInfo(projectId, chapterId, aiResultStr.toString(), dramaInfos));
     }
 
     public void saveDramaInfoEntities(ImageDramaEntity imageDrama) {
@@ -873,29 +945,26 @@ public class BImageDramaService {
                 globalWebSocketHandler.sendErrorMessage("文本大模型请求异常", "没有接收到文本大模型的消息！");
             }
 
-            aiResult = reCombineAiResult(aiResult, chapterInfos);
+            List<AiResult.DramaRole> roles = aiResult.getDramaRoles();
 
-            List<AiResult.Role> roles = aiResult.getRoles();
-
-            Map<String, AiResult.Role> aiResultRoleMap = aiResult.getRoles()
+            Map<String, AiResult.DramaRole> aiResultRoleMap = aiResult.getDramaRoles()
                     .stream()
-                    .collect(Collectors.toMap(AiResult.Role::getRole, Function.identity(), (a, b) -> a));
-            Map<String, AiResult.LinesMapping> linesMappingMap = aiResult.getLinesMappings()
+                    .collect(Collectors.toMap(AiResult.DramaRole::getRole, Function.identity(), (a, b) -> a));
+            Map<String, AiResult.DramaLinesRole> linesMappingMap = aiResult.getDramaLinesRoles()
                     .stream()
-                    .collect(Collectors.toMap(AiResult.LinesMapping::getLinesIndex, Function.identity(), (a, b) -> a));
+                    .collect(Collectors.toMap(AiResult.DramaLinesRole::getLinesIndex, Function.identity(), (a, b) -> a));
 
             List<ImageCommonRoleEntity> commonRoles = imageCommonRoleService.list();
             Map<String, ImageCommonRoleEntity> commonRoleMap = commonRoles.
                     stream()
                     .collect(Collectors.toMap(ImageCommonRoleEntity::getRole, Function.identity(), (a, b) -> a));
 
-            List<Integer> audioModelResetIds = new ArrayList<>();
             boolean hasAside = false;
             for (DramaInfoEntity chapterInfo : chapterInfos) {
                 String key = chapterInfo.getIndex();
-                String role = "旁白";
+                String role = "未知";
                 if (linesMappingMap.containsKey(key)) {
-                    AiResult.LinesMapping linesMapping = linesMappingMap.get(key);
+                    AiResult.DramaLinesRole linesMapping = linesMappingMap.get(key);
                     role = linesMapping.getRole();
                 } else {
                     hasAside = true;
@@ -910,13 +979,12 @@ public class BImageDramaService {
 
 
                 } else {
-                    audioModelResetIds.add(chapterInfo.getId());
                 }
             }
 
             if (hasAside) {
-                String role = "旁白";
-                roles.add(new AiResult.Role(role));
+                String role = "未知";
+                roles.add(new AiResult.DramaRole(role));
             }
 
             List<ImageRoleEntity> textRoleEntities = roles.stream()
@@ -925,6 +993,7 @@ public class BImageDramaService {
                         textRoleEntity.setProjectId(projectId);
                         textRoleEntity.setChapterId(chapterId);
                         textRoleEntity.setRole(role.getRole());
+                        textRoleEntity.setImagePrompt(role.getImagePrompt());
 
                         ImageCommonRoleEntity commonRole = commonRoleMap.get(role.getRole());
                         if (Objects.nonNull(commonRole)) {
@@ -934,7 +1003,7 @@ public class BImageDramaService {
                     }).toList();
 
 
-            List<ImageRoleInferenceEntity> roleInferenceEntities = aiResult.getLinesMappings().stream()
+            List<ImageRoleInferenceEntity> roleInferenceEntities = aiResult.getDramaLinesRoles().stream()
                     .map(linesMapping -> {
                         ImageRoleInferenceEntity roleInferenceEntity = new ImageRoleInferenceEntity();
                         roleInferenceEntity.setProjectId(projectId);
@@ -945,7 +1014,6 @@ public class BImageDramaService {
                     }).toList();
 
             dramaInfoService.updateBatchById(chapterInfos);
-            dramaInfoService.audioModelReset(audioModelResetIds);
 
             imageRoleService.deleteByChapterId(chapterId);
             imageRoleService.saveBatch(textRoleEntities);
@@ -953,7 +1021,39 @@ public class BImageDramaService {
             imageRoleInferenceService.deleteByChapterId(chapterId);
             imageRoleInferenceService.saveBatch(roleInferenceEntities);
 
-        } catch (IOException e) {
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void mergePromptResultInfo(String projectId, String chapterId, String aiResultStr, List<DramaInfoEntity> dramaInfos) {
+
+        System.out.println("=========================文本大模型返回结果=========================");
+        System.out.println(aiResultStr);
+        System.out.println("=========================文本大模型返回结果=========================");
+        if (Objects.isNull(aiResultStr)) {
+            globalWebSocketHandler.sendErrorMessage("文本大模型请求异常", "没有接收到文本大模型的消息！");
+            return;
+        }
+        Map<String, String> promptMap = new HashMap<>();
+        try {
+            for (String line : aiResultStr.split("\n")) {
+                if (StringUtils.equals("画面分析:", line.trim()) || StringUtils.isEmpty(line)) {
+                    continue;
+                }
+                String[] split = line.split("#");
+                promptMap.put(split[0], split[1]);
+            }
+            for (DramaInfoEntity dramaInfo : dramaInfos) {
+                String index = dramaInfo.getIndex();
+                if (promptMap.containsKey(index)) {
+                    dramaInfo.setImagePrompt(promptMap.get(index));
+                }
+            }
+
+            dramaInfoService.updateBatchById(dramaInfos);
+
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
@@ -964,72 +1064,36 @@ public class BImageDramaService {
         }
 
         boolean isMapping = false;
-        List<AiResult.Role> roles = new ArrayList<>();
-        List<AiResult.LinesMapping> linesMappings = new ArrayList<>();
+        List<AiResult.DramaRole> roles = new ArrayList<>();
+        List<AiResult.DramaLinesRole> linesMappings = new ArrayList<>();
         for (String line : text.split("\n")) {
             if (StringUtils.equals("角色分析:", line.trim())) {
                 isMapping = false;
                 continue;
             }
-            if (StringUtils.equals("台词分析:", line.trim())) {
+            if (StringUtils.equals("出场分析:", line.trim())) {
                 isMapping = true;
                 continue;
             }
             if (!isMapping) {
-                String[] split = line.trim().split(",");
-                if (split.length == 3) {
-                    roles.add(new AiResult.Role(split[0].trim(), split[1].trim(), split[2].trim()));
+                String[] split = line.trim().split("#");
+                if (split.length == 2) {
+                    roles.add(new AiResult.DramaRole(split[0].trim(), split[1].trim()));
                 }
             }
             if (isMapping) {
-                String[] split = line.trim().split(",");
-                if (split.length == 3) {
-                    linesMappings.add(new AiResult.LinesMapping(split[0].trim(), split[1].trim(), split[2].trim()));
+                String[] split = line.trim().split("#");
+                if (split.length == 2) {
+                    linesMappings.add(new AiResult.DramaLinesRole(split[0].trim(), split[1].trim()));
                 }
             }
         }
 
-        return new AiResult(roles, linesMappings);
+        AiResult aiResult = new AiResult();
+        aiResult.setDramaRoles(roles);
+        aiResult.setDramaLinesRoles(linesMappings);
+        return aiResult;
     }
 
-    public AiResult reCombineAiResult(AiResult aiResult, List<DramaInfoEntity> chapterInfos) throws IOException {
 
-        List<String> indexes = chapterInfos.stream().map(DramaInfoEntity::getIndex).toList();
-
-        List<AiResult.Role> roles = aiResult.getRoles();
-        List<AiResult.LinesMapping> linesMappings = aiResult.getLinesMappings()
-                .stream()
-                .filter(v -> indexes.contains(v.getLinesIndex()))
-                .toList();
-
-        // 大模型总结的角色列表有时候会多也会少
-        List<AiResult.Role> combineRoles = combineRoles(roles, linesMappings);
-
-        AiResult result = new AiResult();
-        result.setLinesMappings(linesMappings);
-        result.setRoles(combineRoles);
-        return result;
-    }
-
-    public List<AiResult.Role> combineRoles(List<AiResult.Role> roles, List<AiResult.LinesMapping> linesMappings) {
-        Map<String, Long> linesRoleCountMap = linesMappings.stream()
-                .collect(Collectors.groupingBy(AiResult.LinesMapping::getRole, Collectors.counting()));
-        List<AiResult.Role> filterRoles = roles.stream().filter(r -> linesRoleCountMap.containsKey(r.getRole())).toList();
-
-        Set<String> filterRoleSet = filterRoles.stream().map(AiResult.Role::getRole).collect(Collectors.toSet());
-        List<AiResult.Role> newRoleList = linesMappings.stream().filter(m -> !filterRoleSet.contains(m.getRole()))
-                .map(m -> {
-                    AiResult.Role role = new AiResult.Role();
-                    role.setRole(m.getRole());
-                    return role;
-                })
-                .collect(Collectors.toMap(AiResult.Role::getRole, Function.identity(), (v1, b) -> v1))
-                .values().stream().toList();
-
-        List<AiResult.Role> newRoles = new ArrayList<>();
-        newRoles.addAll(filterRoles);
-        newRoles.addAll(newRoleList);
-        newRoles.sort(Comparator.comparingLong((AiResult.Role r) -> linesRoleCountMap.get(r.getRole())).reversed());
-        return newRoles;
-    }
 }

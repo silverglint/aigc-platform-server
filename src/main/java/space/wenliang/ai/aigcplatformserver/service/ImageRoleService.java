@@ -38,4 +38,5 @@ public class ImageRoleService extends ServiceImpl<ImageRoleMapper, ImageRoleEnti
         this.remove(new LambdaQueryWrapper<ImageRoleEntity>()
                 .eq(ImageRoleEntity::getProjectId, projectId));
     }
+
 }
