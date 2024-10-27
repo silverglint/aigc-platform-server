@@ -1,5 +1,6 @@
 package space.wenliang.ai.aigcplatformserver.service.business;
 
+import cn.hutool.core.io.FileUtil;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -8,31 +9,37 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-import space.wenliang.ai.aigcplatformserver.ai.audio.AudioCreator;
 import space.wenliang.ai.aigcplatformserver.bean.ControlsUpdate;
 import space.wenliang.ai.aigcplatformserver.bean.UpdateModelInfo;
+import space.wenliang.ai.aigcplatformserver.bean.comfyui.FluxBaseParam;
 import space.wenliang.ai.aigcplatformserver.common.AudioTaskStateConstants;
 import space.wenliang.ai.aigcplatformserver.config.EnvConfig;
 import space.wenliang.ai.aigcplatformserver.entity.DramaInfoEntity;
 import space.wenliang.ai.aigcplatformserver.entity.DramaInfoInferenceEntity;
+import space.wenliang.ai.aigcplatformserver.entity.ImageCommonRoleEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageDramaEntity;
+import space.wenliang.ai.aigcplatformserver.entity.ImageProjectEntity;
 import space.wenliang.ai.aigcplatformserver.entity.ImageRoleEntity;
-import space.wenliang.ai.aigcplatformserver.entity.TextCommonRoleEntity;
 import space.wenliang.ai.aigcplatformserver.service.DramaInfoInferenceService;
 import space.wenliang.ai.aigcplatformserver.service.DramaInfoService;
+import space.wenliang.ai.aigcplatformserver.service.ImageCommonRoleService;
 import space.wenliang.ai.aigcplatformserver.service.ImageDramaService;
 import space.wenliang.ai.aigcplatformserver.service.ImageProjectService;
 import space.wenliang.ai.aigcplatformserver.service.ImageRoleService;
-import space.wenliang.ai.aigcplatformserver.service.TextCommonRoleService;
 import space.wenliang.ai.aigcplatformserver.service.cache.GlobalSettingService;
+import space.wenliang.ai.aigcplatformserver.service.comfyui.ComfyuiTaskService;
 import space.wenliang.ai.aigcplatformserver.socket.GlobalWebSocketHandler;
 import space.wenliang.ai.aigcplatformserver.socket.TextProjectWebSocketHandler;
+import space.wenliang.ai.aigcplatformserver.util.FileUtils;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -42,14 +49,14 @@ public class BDramaInfoService {
     public static final LinkedBlockingDeque<DramaInfoEntity> audioCreateTaskQueue = new LinkedBlockingDeque<>();
 
     private final EnvConfig envConfig;
-    private final AudioCreator audioCreator;
+    private final ComfyuiTaskService comfyuiTaskService;
 
     private final ImageRoleService imageRoleService;
     private final ImageProjectService imageProjectService;
     private final ImageDramaService imageDramaService;
     private final DramaInfoService dramaInfoService;
     private final DramaInfoInferenceService dramaInfoInferenceService;
-    private final TextCommonRoleService textCommonRoleService;
+    private final ImageCommonRoleService imageCommonRoleService;
 
     private final GlobalWebSocketHandler globalWebSocketHandler;
     private final TextProjectWebSocketHandler textProjectWebSocketHandler;
@@ -71,8 +78,8 @@ public class BDramaInfoService {
 
             if (!CollectionUtils.isEmpty(dramaInfoEntities)) {
 
-                List<TextCommonRoleEntity> commonRoleEntities = textCommonRoleService.getByProjectId(projectId);
-                Optional<TextCommonRoleEntity> asideRoleOptional = commonRoleEntities.stream()
+                List<ImageCommonRoleEntity> commonRoleEntities = imageCommonRoleService.getByProjectId(projectId);
+                Optional<ImageCommonRoleEntity> asideRoleOptional = commonRoleEntities.stream()
                         .filter(r -> StringUtils.equals(r.getRole(), "未知"))
                         .findAny();
 
@@ -82,7 +89,7 @@ public class BDramaInfoService {
                 imageRoleEntity.setRole("未知");
 
                 if (asideRoleOptional.isPresent()) {
-                    TextCommonRoleEntity textCommonRoleEntity = asideRoleOptional.get();
+                    ImageCommonRoleEntity textCommonRoleEntity = asideRoleOptional.get();
 
 
                     dramaInfoEntities = dramaInfoEntities.stream()
@@ -112,6 +119,10 @@ public class BDramaInfoService {
         }
 
         return dramaInfos;
+    }
+
+    public DramaInfoEntity queryDramaInfo(int dramaInfoId) {
+        return dramaInfoService.queryDramaInfo(dramaInfoId);
     }
 
 
@@ -200,17 +211,30 @@ public class BDramaInfoService {
         dramaInfoInferenceService.removeById(dramaInfoInferenceEntity.getId());
     }
 
-    public void addAudioCreateTask(DramaInfoEntity chapterInfoEntity) {
-        DramaInfoEntity chapterInfo = dramaInfoService.getById(chapterInfoEntity.getId());
-        if (Objects.nonNull(chapterInfo)) {
-            audioCreateTaskQueue.add(chapterInfo);
-        }
-
-        sendAudioGenerateSummaryMsg(chapterInfoEntity.getProjectId(), chapterInfoEntity.getChapterId());
+    public void addImageCreateTask(DramaInfoEntity dramaInfo) {
+        ImageProjectEntity imageProject = imageProjectService.getByProjectId(dramaInfo.getProjectId());
+        ImageDramaEntity imageDrama = imageDramaService.getImageDramaAndContent(dramaInfo.getProjectId(), dramaInfo.getChapterId());
+        DramaInfoEntity entity = dramaInfoService.getById(dramaInfo.getId());
+        comfyuiTaskService.submitFluxBaseTask(FluxBaseParam.builder()
+                .latentBatchSize(2).imgId(entity.getIndex())
+                .prompt(entity.getImagePrompt())
+                .outputPath(envConfig.buildProjectPath(
+                        "image",
+                        FileUtils.fileNameFormat(imageProject.getProjectName()),
+                        FileUtils.fileNameFormat(imageDrama.getChapterName())).toString())
+                .build());
+//        sendAudioGenerateSummaryMsg(dramaInfo.getProjectId(), dramaInfo.getChapterId());
     }
 
 
     public void startCreateImage(String projectId, String chapterId, String actionType, List<Integer> chapterInfoIds) {
+        ImageProjectEntity imageProject = imageProjectService.getByProjectId(projectId);
+        ImageDramaEntity imageDrama = imageDramaService.getImageDramaAndContent(projectId, chapterId);
+        List<ImageRoleEntity> roles = imageRoleService.getByChapterId(chapterId);
+        List<ImageCommonRoleEntity> commonRoles = imageCommonRoleService.getByProjectId(projectId);
+        Map<String, String> promptMap = commonRoles.stream().collect(Collectors.toMap(ImageCommonRoleEntity::getRole, ImageCommonRoleEntity::getImagePrompt));
+        roles.forEach(role -> promptMap.put(role.getRole(), role.getImagePrompt()));
+
         List<DramaInfoEntity> entities = dramaInfoService.getByChapterId(chapterId)
                 .stream()
                 .filter(c -> {
@@ -221,11 +245,41 @@ public class BDramaInfoService {
                     } else {
                         return chapterInfoIds.contains(c.getId());
                     }
-                })
-                .toList();
-        audioCreateTaskQueue.addAll(entities);
+                }).toList();
+        for (DramaInfoEntity entity : entities) {
+            Path path = envConfig.buildProjectPath(
+                    "image",
+                    FileUtils.fileNameFormat(imageProject.getProjectName()),
+                    FileUtils.fileNameFormat(imageDrama.getChapterName()),
+                    "previewImages");
+            int latentBatchSize = 2;
+            StringBuilder rolePrompt = new StringBuilder();
+            if (StringUtils.isNotEmpty(entity.getRole())) {
+                for (String role : entity.getRole().split(",")) {
+                    rolePrompt.append(promptMap.get(role)).append(",");
+                }
+            }
+            FluxBaseParam param = FluxBaseParam.builder()
+                    .latentBatchSize(latentBatchSize).imgId(entity.getIndex()).projectId(projectId).chapterId(chapterId)
+                    .prompt(rolePrompt + entity.getImagePrompt())
+                    .outputPath(path.toString())
+                    .build();
 
-        sendAudioGenerateSummaryMsg(projectId, chapterId);
+            if (FileUtil.isDirectory(path)) {
+                List<String> imageNames = FileUtil.listFileNames(path.toString());
+                imageNames.stream().filter(name -> name.startsWith(entity.getIndex())).forEach(name -> FileUtil.del(path.resolve(name)));
+            } else {
+                FileUtil.mkdir(path);
+            }
+            StringBuilder imgFileNames = new StringBuilder();
+            for (int i = 0; i < latentBatchSize; i++) {
+                imgFileNames.append(entity.getIndex()).append("_").append(StringUtils.leftPad(String.valueOf(i + 1), 2, "0")).append(".png").append(";");
+            }
+            imgFileNames.deleteCharAt(imgFileNames.length() - 1);
+            entity.setPreviewImageFiles(imgFileNames.toString());
+            comfyuiTaskService.submitFluxBaseTask(param);
+        }
+        dramaInfoService.updateBatchById(entities);
     }
 
 
@@ -287,5 +341,9 @@ public class BDramaInfoService {
         audioCreateTaskQueue.forEach(t -> creatingIds.add(t.getIndex()));
         j1.put("creatingIds", creatingIds);
         textProjectWebSocketHandler.sendMessageToProject(projectId, JSON.toJSONString(j1));
+    }
+
+    public void imageSave(String projectId, String chapterId, String imageId) {
+
     }
 }

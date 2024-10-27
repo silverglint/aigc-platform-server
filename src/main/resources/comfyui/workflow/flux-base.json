@@ -402,18 +402,5 @@
     "_meta": {
       "title": "Text Multiline"
     }
-  },
-  "337": {
-    "inputs": {
-      "filename_prefix": "ComfyUI",
-      "images": [
-        "326",
-        5
-      ]
-    },
-    "class_type": "SaveImage",
-    "_meta": {
-      "title": "Save Image"
-    }
   }
 }

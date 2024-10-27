@@ -28,4 +28,6 @@ public interface DramaInfoMapper extends BaseMapper<DramaInfoEntity> {
     List<DramaSummary> dramaSummary4SQLite();
 
     List<DramaInfoEntity> getByChapterId(@Param("chapterId") String chapterId);
+
+    DramaInfoEntity queryDramaInfo(@Param("dramaInfoId") int dramaInfoId);
 }

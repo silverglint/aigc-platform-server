@@ -1,6 +1,7 @@
 package space.wenliang.ai.aigcplatformserver.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,14 +18,19 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
 import org.springframework.web.reactive.socket.client.WebSocketClient;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import space.wenliang.ai.aigcplatformserver.spring.resolver.SingleValueParamHandlerMethodArgumentResolver;
 
+import java.io.File;
 import java.util.List;
 
+@RequiredArgsConstructor
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
+
+    private final EnvConfig envConfig;
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
@@ -89,5 +95,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Bean
     public WebSocketClient webSocketClient() {
         return new ReactorNettyWebSocketClient();
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        String projectDir = envConfig.getUserDir() + File.separator + "project";
+        registry.addResourceHandler("/projectDirResource/**").addResourceLocations("file:/" + projectDir + File.separator);
     }
 }

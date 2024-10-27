@@ -17,7 +17,6 @@ public class ServerTest {
 
     @Test
     public void test() {
-        comfyuiTaskService.submitFluxBaseTask("123456789");
         System.out.println(1);
     }
 }

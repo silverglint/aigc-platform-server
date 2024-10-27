@@ -38,9 +38,6 @@ public class ImageDramaEntity {
     private Integer textNum;
 
     @TableField(exist = false)
-    private Integer dialogueNum;
-
-    @TableField(exist = false)
     private Integer roleNum;
 
     @TableField(exist = false)

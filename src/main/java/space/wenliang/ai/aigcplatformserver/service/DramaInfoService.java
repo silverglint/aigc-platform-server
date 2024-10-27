@@ -61,6 +61,10 @@ public class DramaInfoService extends ServiceImpl<DramaInfoMapper, DramaInfoEnti
         return dramaInfoMapper.getByChapterId(chapterId);
     }
 
+    public DramaInfoEntity queryDramaInfo(int dramaInfoId){
+        return dramaInfoMapper.queryDramaInfo(dramaInfoId);
+    }
+
 
     public List<DramaInfoEntity> buildDramaInfos(ImageDramaEntity imageDramaEntity) {
         if (Objects.isNull(imageDramaEntity) || StringUtils.isBlank(imageDramaEntity.getContent())) {

@@ -125,6 +125,12 @@ public class ImageDramaController {
         return Result.success(list);
     }
 
+    @PostMapping("queryDramaInfo")
+    public Result<Object> queryDramaInfo(@RequestBody DramaInfoEntity dramaInfo) {
+        DramaInfoEntity info = bDramaInfoService.queryDramaInfo(dramaInfo.getId());
+        return Result.success(info);
+    }
+
     @PostMapping("chapterInfoSort")
     public Result<Object> chapterInfoSort(@RequestBody List<DramaInfoEntity> chapterInfoEntities) {
         bDramaInfoService.chapterInfoSort(chapterInfoEntities);
@@ -244,7 +250,7 @@ public class ImageDramaController {
 
     @PostMapping(value = "createAudio")
     public Result<Object> createAudio(@RequestBody DramaInfoEntity chapterInfoEntity) {
-        bDramaInfoService.addAudioCreateTask(chapterInfoEntity);
+        bDramaInfoService.addImageCreateTask(chapterInfoEntity);
         return Result.success();
     }
 

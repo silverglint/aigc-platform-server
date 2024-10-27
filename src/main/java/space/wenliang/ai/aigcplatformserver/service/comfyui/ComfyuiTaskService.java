@@ -1,20 +1,18 @@
 package space.wenliang.ai.aigcplatformserver.service.comfyui;
 
 import com.comfyui.common.entity.ComfyWorkFlow;
-import com.comfyui.common.entity.ComfyWorkFlowNode;
 import com.comfyui.queue.common.DrawingTaskInfo;
 import com.comfyui.queue.common.IDrawingTaskSubmit;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
+import space.wenliang.ai.aigcplatformserver.bean.comfyui.FluxBaseParam;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -29,26 +27,16 @@ public class ComfyuiTaskService {
     private final IDrawingTaskSubmit taskSubmit;
     private final ResourceLoader resourceLoader;
 
-    @PostConstruct
-    public void testSubmitTask() {
-        submitFluxBaseTask("test1");
-        submitFluxBaseTask("test2");
-        log.info("绘图任务提交完成");
-    }
-
-    /**
-     * 提交任务
-     *
-     * @param taskId 自定义任务id
-     */
-    public void submitFluxBaseTask(String taskId) {
+    public void submitFluxBaseTask(FluxBaseParam param) {
         ComfyWorkFlow flow = getFlow("flux-base.json");
         assert flow != null;
-        flow.getNode("6").getInputs().put("seed",Math.abs(new Random().nextInt()));
-        flow.getNode("336").getInputs().put("text","一个女孩，在跳舞");
-        flow.getNode("262").getInputs().put("output_path","E:\\software\\code\\javaProduct\\aigc-platform-server\\model\\test");
+        flow.getNode("6").getInputs().put("seed", param.getSeed());
+        flow.getNode("336").getInputs().put("text", param.getPrompt());
+        flow.getNode("262").getInputs().put("output_path", param.getOutputPath());
+        flow.getNode("262").getInputs().put("filename_prefix", param.getImgId());
+        flow.getNode("328").getInputs().put("batch_size", param.getLatentBatchSize());
         // 提交任务
-        taskSubmit.submit(new DrawingTaskInfo(taskId, flow, 5, TimeUnit.MINUTES));
+        taskSubmit.submit(new DrawingTaskInfo(param.getTaskId(), flow, 5, TimeUnit.MINUTES));
     }
 
     /**
