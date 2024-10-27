@@ -248,12 +248,12 @@ public class ImageDramaController {
         return Result.success();
     }
 
-    @PostMapping(value = "startCreateAudio")
-    public Result<Object> startCreateAudio(@SingleValueParam("projectId") String projectId,
+    @PostMapping(value = "startCreateImage")
+    public Result<Object> startCreateImage(@SingleValueParam("projectId") String projectId,
                                            @SingleValueParam("chapterId") String chapterId,
                                            @SingleValueParam("actionType") String actionType,
                                            @SingleValueParam("chapterInfoIds") List<Integer> chapterInfoIds) {
-        bDramaInfoService.startCreateAudio(projectId, chapterId, actionType, chapterInfoIds);
+        bDramaInfoService.startCreateImage(projectId, chapterId, actionType, chapterInfoIds);
         return Result.success();
     }
 

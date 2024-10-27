@@ -210,7 +210,7 @@ public class BDramaInfoService {
     }
 
 
-    public void startCreateAudio(String projectId, String chapterId, String actionType, List<Integer> chapterInfoIds) {
+    public void startCreateImage(String projectId, String chapterId, String actionType, List<Integer> chapterInfoIds) {
         List<DramaInfoEntity> entities = dramaInfoService.getByChapterId(chapterId)
                 .stream()
                 .filter(c -> {

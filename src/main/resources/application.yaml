@@ -28,6 +28,18 @@ spring:
     url: jdbc:sqlite:aigc_platform.db
     username:
     password:
+  comfyui:
+      # 主机地址 默认127.0.0.1
+      host: 127.0.0.1
+      # comfyui端口号 默认8188
+      port: 8188
+      # comfyui会话id 默认随机生成UUID
+      client-id: test
+      # 提交绘图任务时，如果Comfyui内部有非当前服务提交的任务时是否自动取消
+      auto-clear-task: true
+      queue:
+        # 任务队列类型 目前支持: queue(阻塞队列)、rabbit 后续支持: rocket、kafka、custom
+        type: thread
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
@@ -47,3 +59,4 @@ spring:
     url: jdbc:sqlite:aigc_platform.db
     username:
     password:
+
