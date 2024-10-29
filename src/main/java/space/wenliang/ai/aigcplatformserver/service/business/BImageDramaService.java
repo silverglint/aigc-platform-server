@@ -3,16 +3,20 @@ package space.wenliang.ai.aigcplatformserver.service.business;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 import space.wenliang.ai.aigcplatformserver.ai.chat.AiService;
 import space.wenliang.ai.aigcplatformserver.bean.AiResult;
 import space.wenliang.ai.aigcplatformserver.bean.DramaAdd;
+import space.wenliang.ai.aigcplatformserver.bean.DramaExportParam;
 import space.wenliang.ai.aigcplatformserver.bean.DramaSummary;
 import space.wenliang.ai.aigcplatformserver.bean.ImagePromptInferenceParam;
 import space.wenliang.ai.aigcplatformserver.bean.ImageRoleInferenceData;
@@ -47,6 +51,16 @@ import space.wenliang.ai.aigcplatformserver.service.cache.GlobalSettingService;
 import space.wenliang.ai.aigcplatformserver.socket.GlobalWebSocketHandler;
 import space.wenliang.ai.aigcplatformserver.util.FileUtils;
 import space.wenliang.ai.aigcplatformserver.util.IdUtils;
+import space.wenliang.ai.aigcplatformserver.util.jianying.Draft;
+import space.wenliang.ai.aigcplatformserver.util.jianying.FrameUtils;
+import space.wenliang.ai.aigcplatformserver.util.jianying.materials.AudioMaterial;
+import space.wenliang.ai.aigcplatformserver.util.jianying.materials.TextMaterial;
+import space.wenliang.ai.aigcplatformserver.util.jianying.materials.VideoMaterial;
+import space.wenliang.ai.aigcplatformserver.util.jianying.tracks.AudioTrack;
+import space.wenliang.ai.aigcplatformserver.util.jianying.tracks.TextTrack;
+import space.wenliang.ai.aigcplatformserver.util.jianying.tracks.VideoTrack;
+import space.wenliang.ai.aigcplatformserver.util.srt.SRT;
+import space.wenliang.ai.aigcplatformserver.util.srt.SrtUtils;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -68,65 +82,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BImageDramaService {
 
-    static String parseStep = """
-            1. 分析下面原文中有哪些角色，角色中有观众、群众之类的角色时统一使用观众这个角色，他们的性别和年龄段只能在下面范围中选择一个：
-            性别：男、女、未知。
-            年龄段：少年、青年、中年、老年、未知。
-                        
-            2. 请分析下面台词部分的内容是属于原文部分中哪个角色的，然后结合上下文分析当时的情绪，情绪只能在下面范围中选择一个：
-            情绪：中立、开心、吃惊、难过、厌恶、生气、恐惧。
-                        
-            3. 严格按照台词文本中的顺序在原文文本中查找。每行台词都做一次处理，不能合并台词。
-            4. 分析的台词内容如果不是台词，不要加入到返回结果中。
-            5. 返回结果只能包含角色分析、台词分析两个部分。
-            """;
-    static String outputFormat = """
-            角色分析:
-            角色名,男,青年
-            角色名,男,青年
-                        
-            台词分析:
-            台词序号,角色名,高兴
-            台词序号,角色名,难过
-            """;
-    static String temp = """
-            角色分析:
-            萧炎,男,青年
-            中年男子,男,中年
-            少女,女,少年
-            萧媚,女,少年
-            萧薰儿,女,少年
-            观众,未知,未知
-                        
-            台词分析:
-            1-0,萧炎,难过
-            3-0,中年男子,中立
-            5-0,观众,厌恶
-            6-0,观众,生气
-            7-0,观众,厌恶
-            8-0,观众,难过
-            9-0,观众,中立
-            12-0,萧炎,难过
-            13-0,中年男子,中立
-            18-0,中年男子,中立
-            19-0,中年男子,中立
-            20-0,萧媚,开心
-            21-0,观众,中立
-            22-0,观众,中立
-            26-0,萧炎,难过
-            32-0,中年男子,中立
-            40-0,中年男子,中立
-            42-0,观众,吃惊
-            45-1,中年男子,中立
-            47-0,萧薰儿,中立
-            48-0,萧薰儿,中立
-            49-0,萧炎,难过
-            50-0,萧薰儿,中立
-            51-0,萧炎,难过
-            52-1,萧薰儿,中立
-            52-3,萧薰儿,中立
-            53-0,萧炎,尴尬
-            """;
     private final EnvConfig envConfig;
     private final AiService aiService;
     private final ImageRoleService imageRoleService;
@@ -1095,5 +1050,47 @@ public class BImageDramaService {
         return aiResult;
     }
 
+    @SneakyThrows
+    public void dramaExpose(DramaExportParam param, MultipartFile audio) {
+        String projectId = param.getProjectId();
+        String chapterId = param.getChapterId();
+        ImageProjectEntity imageProject = imageProjectService.getByProjectId(projectId);
+        ImageDramaEntity imageDrama = imageDramaService.getImageDramaAndContent(projectId, chapterId);
+        List<DramaInfoEntity> dramaInfoList = dramaInfoService.getByChapterId(chapterId);
 
+        Draft draft = new Draft();
+        TextTrack textTrack = new TextTrack();
+        VideoTrack videoTrack = new VideoTrack();
+        TreeMap<Integer, SRT> srt = SrtUtils.parseSrt(imageDrama.getContent());
+        FrameUtils frameUtils = FrameUtils.of();
+        srt.forEach((integer, row) -> {
+            TextMaterial material = new TextMaterial(row.getSrtBody());
+            draft.addMaterial(material);
+            textTrack.addText(material.getId(), frameUtils.framePerMs(row.getBeginTime()), frameUtils.framePerMs(row.getEndTime()));
+        });
+        draft.addTrack(textTrack);
+        for (int i = 0; i < dramaInfoList.size(); i++) {
+            DramaInfoEntity dramaInfo = dramaInfoList.get(i);
+            String imageFiles = dramaInfo.getFinalImageFiles();
+            String path = envConfig.buildProjectPath("image", imageProject.getProjectName(), imageDrama.getChapterName(), imageFiles).toString();
+            VideoMaterial material = new VideoMaterial(path, imageFiles);
+            draft.addMaterial(material);
+            videoTrack.addImg(material.getId(), frameUtils.framePerMs(dramaInfo.getTimeStart()),
+                    i != dramaInfoList.size() - 1 ? frameUtils.framePerMs(dramaInfoList.get(i + 1).getTimeStart()) : frameUtils.framePerMs(dramaInfo.getTimeEnd()));
+        }
+        draft.addTrack(videoTrack);
+        if (audio != null) {
+            Path path = envConfig.buildProjectPath("image", imageProject.getProjectName(), imageDrama.getChapterName(), "output.wav");
+            audio.transferTo(path);
+            FFmpegFrameGrabber grabber = FFmpegFrameGrabber.createDefault(path.toString());
+            grabber.start();
+            long lengthInTime = grabber.getLengthInTime();
+            grabber.close();
+            AudioMaterial material = new AudioMaterial(path.toString(), "output.wav", frameUtils.framePerMs(lengthInTime / 1000));
+            draft.addMaterial(material);
+            draft.addTrack(new AudioTrack().addAudio(material.getId(), 0, frameUtils.framePerMs(lengthInTime / 1000)));
+        }
+        draft.export(envConfig.buildProjectPath("image", imageProject.getProjectName(), imageDrama.getChapterName(),
+                imageProject.getProjectName() + "-" + imageDrama.getChapterName()).toString());
+    }
 }

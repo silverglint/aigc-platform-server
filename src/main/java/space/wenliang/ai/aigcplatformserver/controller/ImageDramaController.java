@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import space.wenliang.ai.aigcplatformserver.bean.ChapterExpose;
 import space.wenliang.ai.aigcplatformserver.bean.ControlsUpdate;
 import space.wenliang.ai.aigcplatformserver.bean.DramaAdd;
+import space.wenliang.ai.aigcplatformserver.bean.DramaExportParam;
 import space.wenliang.ai.aigcplatformserver.bean.DramaSummary;
 import space.wenliang.ai.aigcplatformserver.bean.ProjectQuery;
 import space.wenliang.ai.aigcplatformserver.bean.Subtitle;
@@ -269,9 +269,10 @@ public class ImageDramaController {
         return Result.success();
     }
 
-    @PostMapping(value = "chapterExpose")
-    public Result<Object> chapterExpose(@RequestBody ChapterExpose chapterExpose) throws Exception {
-//        bImageDramaService.chapterExpose(chapterExpose);
+    @PostMapping(value = "dramaExpose")
+    public Result<Object> dramaExpose(@RequestPart("dramaExport") DramaExportParam dramaExport,
+                                      @RequestPart(value = "file",required = false) MultipartFile file) throws Exception {
+        bImageDramaService.dramaExpose(dramaExport, file);
         return Result.success();
     }
 
